@@ -12,9 +12,9 @@
 # pip install matplotlib (done)
 # pip install pandas (done)
 # pip install tensorflow (done)
-# pip install scikit-learn
+# pip install scikit-learn (done)
 # pip install pandas-datareader(done)
-# pip install yfinance
+# pip install yfinance(done)
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,6 +22,7 @@ import pandas as pd
 import pandas_datareader as web
 import datetime as dt
 import tensorflow as tf
+import yfinance as yf
 
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
@@ -41,9 +42,6 @@ TRAIN_START = '2020-01-01'     # Start date to read
 TRAIN_END = '2023-08-01'       # End date to read
 
 # data = web.DataReader(COMPANY, DATA_SOURCE, TRAIN_START, TRAIN_END) # Read data using yahoo
-
-
-import yfinance as yf
 
 # Get the data for the stock AAPL
 data = yf.download(COMPANY,TRAIN_START,TRAIN_END)
