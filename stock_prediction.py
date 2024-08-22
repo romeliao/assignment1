@@ -23,10 +23,97 @@ import pandas_datareader as web
 import datetime as dt
 import tensorflow as tf
 import yfinance as yf
+import os
 
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM, InputLayer
+#------------------------------------------------------------------------------
+# load and process data function
+#------------------------------------------------------------------------------
+# This function is used to load and process stock data for a spcific company withing a specific time frame 
+# This function allows handling missing values and can save the processed data to a file for future use 
+def load_and_process_dataset(company, start_date, end_date, features, 
+                             nan_strategy = 'ffill', file_path =None,
+                             split_method="ratio", test_size=0.2,
+                             split_date=None, random_state=None,
+                             scale=False, feature_range=(0,1)):
+    
+    #this is to ensure that the start date and end date are called as objects
+    #and not text.
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+
+    #load data from a file if it exists
+    if file_path and os.path.exists(file_path):
+        data = pd.read_csv(file_path, index_col=0, parse_dates=True)
+    
+        #filter data by the specified date range 
+        data = data[(data.index >= start_date) & (data.index <= end_date)]
+    else:
+        #doanload data using yfinance 
+        # if there is no data file found it will download the data using yfinance
+        data = yf.download(company, start=start_date, end=end_date)
+        
+        #Select the desired features 
+        data = data [features]
+
+        #handle missing values 
+        # the foward fill is used to fill missing values by propagating the last valid 
+        # value forward to the next missing value 
+        if nan_strategy =="ffill":
+            data.fillna(method = 'ffill', inplace = True)
+
+        # the backwordfill is used to fill missing value by propagating the next valid
+        # value backward to the previous missing value
+        # its useful to fill missing vlaues with the next known value, assuming that 
+        # the upcoming data should be used to estimate missing values 
+        elif nan_strategy =="bfill":
+            data.fillna(method = 'bfill', inplace = True)
+
+        # the drop missing value is used to remove any rows or columns with missing values 
+        # from the dataset
+        elif nan_strategy =="drop":
+            data.dropna(inplace = True)
+        else :
+            raise ValueError("Invalid NaN handling strategy. Choose from 'ffill', 'bfill', or 'drop'.")
+    
+    #if a file path is provided save the data
+    # this code takes the file and save it to the designated file path 
+        if file_path:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            data.to_csv(file_path)
+
+    #Initializ a dictionary to store scalers if scaling is enabled 
+    column_scaler = {}
+
+    if scale:
+        for column in features:
+            scaler = MinMaxScaler(feature_range=feature_range)
+            data[column] = scaler.fit_transform(data[column].values.reshape(-1,1))
+            column_scaler[column] = scaler
+    #what this function does is that its a loop that iterates each column that is 
+    # specified in the features list 
+    #is then creates a scaler for each feature a new MinMaxScaler is created. the feature_range will specifies
+    #the range to which the data is scaled to.
+    #the data is then reshaped into a 2D array with one column and multiple rows
+    #the fit transform is applied to the data which scales the data and replaces the original values in the dataset 
+    #The values is then sotred in the column_Scaler dictionary, this allows it to reverse the transformation later if needed
+
+    #split the data into training and testing sets
+    if split_method == 'ratio':
+        train_data, test_data = train_test_split(data, test_size=test_size, shuffle=False)
+    elif split_method =='date' and split_date:
+        train_data = data[data.index < split_date]
+        test_data = data[data.index >= split_date]
+    elif split_method =='random':
+        train_data, test_data = train_test_split(data, test_size=test_size, random_state= random_state)
+    else:
+        raise ValueError("Invalid split method. choose from 'ratio','date', or 'random'.")
+
+    return train_data, test_data
+
 
 #------------------------------------------------------------------------------
 # Load Data
@@ -38,13 +125,29 @@ from tensorflow.keras.layers import Dense, Dropout, LSTM, InputLayer
 # DATA_SOURCE = "yahoo"
 COMPANY = 'CBA.AX'
 
-TRAIN_START = '2020-01-01'     # Start date to read
-TRAIN_END = '2023-08-01'       # End date to read
+TRAIN_START = '2020-01-01'              # Start date to read
+TRAIN_END = '2023-08-01'                # End date to read
+FEATURES = ['Open', 'Close', 'Volume']  #list of specific columns 
+NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
+PRICE_VALUE = "Close"                   #indicates what price column will be used as target value 
+FILE_PATH = "data/stock_data.csv"       #file path to save the data
+SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
+TEST_SIZE = 0.2                         #proportion of data to be used for testing
+SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
+SCALE = 'True'
+FEATURE_RANGE = (0,1)
 
 # data = web.DataReader(COMPANY, DATA_SOURCE, TRAIN_START, TRAIN_END) # Read data using yahoo
 
-# Get the data for the stock AAPL
-data = yf.download(COMPANY,TRAIN_START,TRAIN_END)
+train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END, 
+                                                 FEATURES, nan_strategy=NAN_STRATEGY, 
+                                                 file_path=FILE_PATH, 
+                                                 split_method=SPLIT_METHOD, 
+                                                 test_size=TEST_SIZE, 
+                                                 split_date=SPLIT_DATE,scale=SCALE,
+                                                 feature_range=FEATURE_RANGE)
+
+
 
 #------------------------------------------------------------------------------
 # Prepare Data
@@ -55,12 +158,10 @@ data = yf.download(COMPANY,TRAIN_START,TRAIN_END)
 # 2) Use a different price value eg. mid-point of Open & Close
 # 3) Change the Prediction days
 #------------------------------------------------------------------------------
-PRICE_VALUE = "Close"
-
 scaler = MinMaxScaler(feature_range=(0, 1)) 
 # Note that, by default, feature_range=(0, 1). Thus, if you want a different 
 # feature_range (min,max) then you'll need to specify it here
-scaled_data = scaler.fit_transform(data[PRICE_VALUE].values.reshape(-1, 1)) 
+scaled_data = scaler.fit_transform(train_data[PRICE_VALUE].values.reshape(-1, 1))
 # Flatten and normalise the data
 # First, we reshape a 1D array(n) to 2D array(n,1)
 # We have to do that because sklearn.preprocessing.fit_transform()
@@ -97,6 +198,8 @@ x_train, y_train = np.array(x_train), np.array(y_train)
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 # We now reshape x_train into a 3D array(p, q, 1); Note that x_train 
 # is an array of p inputs with each input being a 2D array 
+
+
 
 #------------------------------------------------------------------------------
 # Build the Model
@@ -178,6 +281,8 @@ model.fit(x_train, y_train, epochs=25, batch_size=32)
 # your pre-trained model and run it on the new input for which the prediction
 # need to be made.
 
+
+
 #------------------------------------------------------------------------------
 # Test the model accuracy on existing data
 #------------------------------------------------------------------------------
@@ -186,8 +291,15 @@ TEST_START = '2023-08-02'
 TEST_END = '2024-07-02'
 
 # test_data = web.DataReader(COMPANY, DATA_SOURCE, TEST_START, TEST_END)
+#test_data = yf.download(COMPANY,TEST_START,TEST_END)
 
-test_data = yf.download(COMPANY,TEST_START,TEST_END)
+train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END, 
+                                                    FEATURES, nan_strategy=NAN_STRATEGY, 
+                                                    file_path=FILE_PATH, 
+                                                    split_method=SPLIT_METHOD, 
+                                                    test_size=TEST_SIZE, 
+                                                    split_date=SPLIT_DATE, scale=SCALE,
+                                                    feature_range=FEATURE_RANGE)
 
 
 # The above bug is the reason for the following line of code
@@ -195,7 +307,7 @@ test_data = yf.download(COMPANY,TEST_START,TEST_END)
 
 actual_prices = test_data[PRICE_VALUE].values
 
-total_dataset = pd.concat((data[PRICE_VALUE], test_data[PRICE_VALUE]), axis=0)
+total_dataset = pd.concat((train_data[PRICE_VALUE], test_data[PRICE_VALUE]), axis=0)
 
 model_inputs = total_dataset[len(total_dataset) - len(test_data) - PREDICTION_DAYS:].values
 # We need to do the above because to predict the closing price of the fisrt
@@ -218,6 +330,9 @@ model_inputs = scaler.transform(model_inputs)
 # TO DO: Generally, there is a better way to process the data so that we 
 # can use part of it for training and the rest for testing. You need to 
 # implement such a way
+# save the final dataframe to csv-results folder
+
+
 
 #------------------------------------------------------------------------------
 # Make predictions on test data
@@ -250,11 +365,11 @@ plt.ylabel(f"{COMPANY} Share Price")
 plt.legend()
 plt.show()
 
+
+
 #------------------------------------------------------------------------------
 # Predict next day
 #------------------------------------------------------------------------------
-
-
 real_data = [model_inputs[len(model_inputs) - PREDICTION_DAYS:, 0]]
 real_data = np.array(real_data)
 real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
