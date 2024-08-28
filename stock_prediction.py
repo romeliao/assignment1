@@ -23,12 +23,96 @@ import pandas_datareader as web
 import datetime as dt
 import tensorflow as tf
 import yfinance as yf
+import mplfinance as mpf
 import os
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM, InputLayer
+
+#------------------------------------------------------------------------------
+# plot candlestick chart function
+#------------------------------------------------------------------------------
+#this function has 4 parameters which is company, start and end date, and n_days
+#the company parameter is the ticker symbol of the company 
+#The start date and end date parameter is used to get the data within that range 
+#the n_days is the numbers of days to resample the data
+def plot_candlestick_chart(company, start_date, end_date,n_days=1):
+    
+    # this is to retrieve the historical stock data for the specified company and data range
+    data = yf.download(company, start=start_date, end=end_date)
+
+    #this if statement is to ensure that if n_days is greater than 1 the function will check the retrieved 
+    #dataframe that contains all the required columns (open,high,low,close,volume) if there is none the 
+    # will be a error that will be raised 
+    if n_days > 1:
+        if not all(col in data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
+            raise ValueError("The DataFrame does not contain all required columns.")
+        
+        #this is used to resample the data to the specified number of days using the resample 
+        #and aggregates teh values using the agg method
+        data = data.resample(f'{n_days}D').agg({
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum'
+        })
+    #this is used to remove any rows with missing values 
+    data.dropna(inplace=True)
+
+    #plot the candlestick chart with the specified style, title and lables
+    mpf.plot(data, type='candle', style='charles', title=f'{company} Candlestick Chart',
+             ylabel='Price', volume=True)
+#------------------------------------------------------------------------------
+# plot Boxplot chart function
+#------------------------------------------------------------------------------
+#this box plot function has 3 parameters which is DF, column and window
+#the DF is for data frame that contains the stock market data
+#The column is to specif which column to be analyzed 
+#the window is the number of trading days to include in each window 
+def plot_stock_boxplot(df, column='Close', window=5):
+    
+    #this if statement is to check if the column exists in the data frame 
+    # if it is not it will raise the error
+    if column not in df.columns:
+        raise ValueError(f"Column '{column}' not found in the DataFrame.")
+
+    #The num_windows will calculate the number of windows that can be created based on the window size
+    #and length of the data set if the size is to large for the dataset it will raise an error
+    num_windows = len(df) - window + 1
+    if num_windows <= 0:
+        raise ValueError(f"Window size {window} is too large for the dataset length.")
+
+    #data_for_boxplot is a list that will hold that data for each window
+    # the loop iterates through the dataframe slicing the data into windows of size and append each slice
+    #into the data_for_boxplot
+    data_for_boxplot = []
+    for i in range(num_windows):
+        window_data = df[column].iloc[i:i + window].values
+        data_for_boxplot.append(window_data)
+
+    #the plt.figure(figsize=(10,6)) is used to set the figure size 
+    #the plt.boxplot(data_for_boxplot, showfliers=False) is used to create the boxplot without showing outliers
+    #the plt.title is used to set the title of the plot
+    #the plt.xlable and plt.ylable is used to set the lables for the x and y axis
+    plt.figure(figsize=(10, 6))
+    plt.boxplot(data_for_boxplot, showfliers=False)
+    plt.title(f'Boxplot of {column} over a Moving Window of {window} Days')
+    plt.xlabel(f'Moving Windows ({window} Days Each)')
+    plt.ylabel(f'{column} Value')
+
+    #plt.xticks is used to set the x axis tick lable and it creates tick at intervals that is 
+    #calculated by max(1, num_window //10) and lables them with the range of days in each window
+    plt.xticks(np.arange(1, num_windows + 1, max(1, num_windows // 10)),
+               [f'{i+1}-{i+window}' for i in range(0, num_windows, max(1, num_windows // 10))])
+    
+    #plt.grid(true) is used to add a grid to the plot
+    #plt.show is used to display the plots
+    plt.grid(True)
+    plt.show()
+
 #------------------------------------------------------------------------------
 # load and process data function
 #------------------------------------------------------------------------------
@@ -46,10 +130,15 @@ def load_and_process_dataset(company, start_date, end_date, features,
     end_date = pd.to_datetime(end_date)
 
     #load data from a file if it exists
+    # indel_col=0 is used to specifi that the first column should be use as 
+    # the index of the dataframe
+    # the parse_dates= ture is used to ensure that the index is parsed as dates
+    #rather than string
     if file_path and os.path.exists(file_path):
         data = pd.read_csv(file_path, index_col=0, parse_dates=True)
     
         #filter data by the specified date range 
+        #data is filtered to include only the rows between 'start_date' and 'end date'
         data = data[(data.index >= start_date) & (data.index <= end_date)]
     else:
         #doanload data using yfinance 
@@ -134,8 +223,10 @@ FILE_PATH = "data/stock_data.csv"       #file path to save the data
 SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
 TEST_SIZE = 0.2                         #proportion of data to be used for testing
 SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
-SCALE = 'True'
-FEATURE_RANGE = (0,1)
+SCALE = 'True'                          # this is to indicate if teh feature scaling is applied to the data
+FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
+WINDOW_SIZE = 10                        # this is the number of consecutive trading days to consider for the moving window
+                                        # to generate the inputs for the models 
 
 # data = web.DataReader(COMPANY, DATA_SOURCE, TRAIN_START, TRAIN_END) # Read data using yahoo
 
@@ -148,6 +239,22 @@ train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END
                                                  feature_range=FEATURE_RANGE)
 
 
+#plot boxplot for the data
+#the plot_stock_boxplot is the function being called this function is used to
+#create the box plot graph
+#the train data arugment is used to represent teh stock data. this data frame wourld use columns such as 
+#'Open', 'Close','High','low'
+#The colum = close is the keyword argument that specifies which clumn of data shoudl be used for ploting the boxplot
+#The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
+plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
+
+#plot candlestick chart for the data.
+#the plot_candlestick_chart is used to call the function to create the candlestick graph 
+#the campany argument is used to pass the company name into the graph title 
+#the train start and train end argument is used to call the data that is used to create the graphs 
+#the n_days=1 is used to represent the data for the single trading days and the n_days are set to a higher number
+#where each candlestick would represent the aggregated data
+plot_candlestick_chart(COMPANY, TRAIN_START,TRAIN_END, n_days=1)
 
 #------------------------------------------------------------------------------
 # Prepare Data
