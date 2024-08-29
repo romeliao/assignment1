@@ -62,7 +62,7 @@ def plot_candlestick_chart(company, start_date, end_date,n_days=1):
     #this is used to remove any rows with missing values 
     data.dropna(inplace=True)
 
-    #plot the candlestick chart with the specified style, title and lables
+    #plot the candlestick chart with the specified style, title and labels
     mpf.plot(data, type='candle', style='charles', title=f'{company} Candlestick Chart',
              ylabel='Price', volume=True)
 #------------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def plot_candlestick_chart(company, start_date, end_date,n_days=1):
 #------------------------------------------------------------------------------
 #this box plot function has 3 parameters which is DF, column and window
 #the DF is for data frame that contains the stock market data
-#The column is to specif which column to be analyzed 
+#The column is to specify which column to be analyzed 
 #the window is the number of trading days to include in each window 
 def plot_stock_boxplot(df, column='Close', window=5):
     
