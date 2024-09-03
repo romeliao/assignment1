@@ -25,11 +25,12 @@ import tensorflow as tf
 import yfinance as yf
 import mplfinance as mpf
 import os
+import time
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, LSTM, InputLayer
+from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,InputLayer
 
 #------------------------------------------------------------------------------
 # plot candlestick chart function
@@ -202,7 +203,43 @@ def load_and_process_dataset(company, start_date, end_date, features,
         raise ValueError("Invalid split method. choose from 'ratio','date', or 'random'.")
 
     return train_data, test_data
+#------------------------------------------------------------------------------
+# create Deep learning model function
+#------------------------------------------------------------------------------
+def create_model(sequence_length, n_features, units=256, cell=GRU,n_layers=2, dropout=0.3,
+                 loss="mean_absolute_error", optimizer="rmsprop", bidirectional=False):
+    
+    #create model
+    model = Sequential()
+    for i in range(n_layers):
+        if i == 0:
 
+            #first layer
+            if bidirectional:
+                model.add(Bidirectional(cell(units, return_sequences=True), 
+                                        batch_input_shape=(None, sequence_length, n_features))) 
+            else: 
+                model.add(cell(units, return_sequences=True, 
+                               batch_input_shape=(None, sequence_length, n_features)))
+        elif i == n_layers - 1:
+            #last layer 
+            if bidirectional:
+                model.add(Bidirectional(cell(units, return_sequences=False)))
+            else:
+                model.add(cell(units, return_sequences=False))
+        else:
+            #hidden layers
+            if bidirectional:
+                model.add(Bidirectional(cell(units,return_sequences=True)))
+            else:
+                model.add(cell(units, return_sequences=True))
+
+        #add dropout after each layer
+    model.add(Dropout(dropout))
+    model.add(Dense(1, activation="linear"))
+    model.compile(loss=loss, metrics=["mean_absolute_error"], optimizer=optimizer)
+
+    return model
 
 #------------------------------------------------------------------------------
 # Load Data
@@ -214,12 +251,11 @@ def load_and_process_dataset(company, start_date, end_date, features,
 # DATA_SOURCE = "yahoo"
 COMPANY = 'CBA.AX'
 
-TRAIN_START = '2020-01-01'              # Start date to read
-TRAIN_END = '2023-08-01'                # End date to read
+TRAIN_START = '2020-02-02'              # Start date to read
+TRAIN_END = '2023-07-09'                # End date to read
 FEATURES = ['Open', 'Close', 'Volume']  #list of specific columns 
 NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
 PRICE_VALUE = "Close"                   #indicates what price column will be used as target value 
-FILE_PATH = "data/stock_data.csv"       #file path to save the data
 SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
 TEST_SIZE = 0.2                         #proportion of data to be used for testing
 SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
@@ -227,34 +263,34 @@ SCALE = 'True'                          # this is to indicate if teh feature sca
 FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
 WINDOW_SIZE = 10                        # this is the number of consecutive trading days to consider for the moving window
                                         # to generate the inputs for the models 
+sequence_length = 13                   # Number of time steps in the input sequence
+n_features = 5                          # Number of features in each time step
+units = 130                             # Number of units in the LSTM layer
+n_layers = 6                            # Number of LSTM layers
+dropout = 0.5                           # Dropout rate
+loss = 'mean_squared_error'             # Loss function
+optimizer = 'adam'                      # Optimizer
+bidirectional = False                    # Whether to use Bidirectional LSTM
+cell = GRU
+
+#file path to save the data
+#FILE_PATH = "data/stock_data.csv"       
+date_now = time.strftime("%Y-%m-%d")
+
+ticker_data_filename = os.path.join("csv-results", f"{COMPANY}_{date_now}.csv")
+# model name to save, making it as unique as possible based on parameters
+model_name = f"{date_now}_{COMPANY}-{SCALE}-{SPLIT_DATE}-\
+{loss}-{optimizer}-{cell.__name__}layers-{n_layers}-units-{units}"
 
 # data = web.DataReader(COMPANY, DATA_SOURCE, TRAIN_START, TRAIN_END) # Read data using yahoo
 
 train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END, 
                                                  FEATURES, nan_strategy=NAN_STRATEGY, 
-                                                 file_path=FILE_PATH, 
+                                                 file_path=ticker_data_filename, 
                                                  split_method=SPLIT_METHOD, 
                                                  test_size=TEST_SIZE, 
                                                  split_date=SPLIT_DATE,scale=SCALE,
                                                  feature_range=FEATURE_RANGE)
-
-
-#plot boxplot for the data
-#the plot_stock_boxplot is the function being called this function is used to
-#create the box plot graph
-#the train data arugment is used to represent teh stock data. this data frame wourld use columns such as 
-#'Open', 'Close','High','low'
-#The colum = close is the keyword argument that specifies which clumn of data shoudl be used for ploting the boxplot
-#The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
-plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
-
-#plot candlestick chart for the data.
-#the plot_candlestick_chart is used to call the function to create the candlestick graph 
-#the campany argument is used to pass the company name into the graph title 
-#the train start and train end argument is used to call the data that is used to create the graphs 
-#the n_days=1 is used to represent the data for the single trading days and the n_days are set to a higher number
-#where each candlestick would represent the aggregated data
-plot_candlestick_chart(COMPANY, TRAIN_START,TRAIN_END, n_days=1)
 
 #------------------------------------------------------------------------------
 # Prepare Data
@@ -285,7 +321,7 @@ scaled_data = scaler.fit_transform(train_data[PRICE_VALUE].values.reshape(-1, 1)
 # given to reshape so as to maintain the same number of elements.
 
 # Number of days to look back to base the prediction
-PREDICTION_DAYS = 60 # Original
+PREDICTION_DAYS = 50 # Original
 
 # To store the training data
 x_train = []
@@ -366,7 +402,7 @@ model.compile(optimizer='adam', loss='mean_squared_error')
 
 # Now we are going to train this model with our training data 
 # (x_train, y_train)
-model.fit(x_train, y_train, epochs=25, batch_size=32)
+model.fit(x_train, y_train, epochs=20, batch_size=30)
 # Other parameters to consider: How many rounds(epochs) are we going to 
 # train our model? Typically, the more the better, but be careful about
 # overfitting!
@@ -378,6 +414,12 @@ model.fit(x_train, y_train, epochs=25, batch_size=32)
 # (a souce of overfitting). Thus, we do this in batches: We'll look at
 # the aggreated errors/losses from a batch of, say, 32 input samples
 # and update our model based on this aggregated loss.
+
+# save the final dataframe to csv-results folder
+csv_results_folder = "csv-results"
+if not os.path.isdir(csv_results_folder):
+    os.mkdir(csv_results_folder)
+csv_filename = os.path.join(csv_results_folder, model_name + ".csv")
 
 # TO DO:
 # Save the model and reload it
@@ -394,15 +436,15 @@ model.fit(x_train, y_train, epochs=25, batch_size=32)
 # Test the model accuracy on existing data
 #------------------------------------------------------------------------------
 # Load the test data
-TEST_START = '2023-08-02'
-TEST_END = '2024-07-02'
+TEST_START = '2022-06-20'
+TEST_END = '2023-05-30'
 
 # test_data = web.DataReader(COMPANY, DATA_SOURCE, TEST_START, TEST_END)
 #test_data = yf.download(COMPANY,TEST_START,TEST_END)
 
 train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END, 
                                                     FEATURES, nan_strategy=NAN_STRATEGY, 
-                                                    file_path=FILE_PATH, 
+                                                    file_path=ticker_data_filename, 
                                                     split_method=SPLIT_METHOD, 
                                                     test_size=TEST_SIZE, 
                                                     split_date=SPLIT_DATE, scale=SCALE,
@@ -484,6 +526,35 @@ real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
 prediction = model.predict(real_data)
 prediction = scaler.inverse_transform(prediction)
 print(f"Prediction: {prediction}")
+
+
+#plot boxplot for the data
+#the plot_stock_boxplot is the function being called this function is used to
+#create the box plot graph
+#the train data arugment is used to represent teh stock data. this data frame wourld use columns such as 
+#'Open', 'Close','High','low'
+#The colum = close is the keyword argument that specifies which clumn of data shoudl be used for ploting the boxplot
+#The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
+plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
+
+#plot candlestick chart for the data.
+#the plot_candlestick_chart is used to call the function to create the candlestick graph 
+#the campany argument is used to pass the company name into the graph title 
+#the train start and train end argument is used to call the data that is used to create the graphs 
+#the n_days=1 is used to represent the data for the single trading days and the n_days are set to a higher number
+#where each candlestick would represent the aggregated data
+plot_candlestick_chart(COMPANY, TRAIN_START,TRAIN_END, n_days=1)
+
+#------------------------------------------------------------------------------
+# call deep learning model
+#------------------------------------------------------------------------------
+# Create the model using the function
+model = create_model(sequence_length, n_features, units=units, cell=GRU,
+                     n_layers=n_layers, dropout=dropout)
+
+# Summary of the model to check the architecture
+model.summary()
+
 
 # A few concluding remarks here:
 # 1. The predictor is quite bad, especially if you look at the next day 
