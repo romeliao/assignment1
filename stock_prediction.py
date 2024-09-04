@@ -7,15 +7,6 @@
 # Youtuble link: https://www.youtube.com/watch?v=PuZY9q-aKLw
 # By: NeuralNine
 
-# Need to install the following (best in a virtual env):
-# pip install numpy (done)
-# pip install matplotlib (done)
-# pip install pandas (done)
-# pip install tensorflow (done)
-# pip install scikit-learn (done)
-# pip install pandas-datareader(done)
-# pip install yfinance(done)
-
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -32,87 +23,10 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,InputLayer
 
-#------------------------------------------------------------------------------
-# plot candlestick chart function
-#------------------------------------------------------------------------------
-#this function has 4 parameters which is company, start and end date, and n_days
-#the company parameter is the ticker symbol of the company 
-#The start date and end date parameter is used to get the data within that range 
-#the n_days is the numbers of days to resample the data
-def plot_candlestick_chart(company, start_date, end_date,n_days=1):
-    
-    # this is to retrieve the historical stock data for the specified company and data range
-    data = yf.download(company, start=start_date, end=end_date)
+from Candlestick import plot_candlestick_chart
+from Boxplot import plot_stock_boxplot
+from DeepLearningModel import create_model
 
-    #this if statement is to ensure that if n_days is greater than 1 the function will check the retrieved 
-    #dataframe that contains all the required columns (open,high,low,close,volume) if there is none the 
-    # will be a error that will be raised 
-    if n_days > 1:
-        if not all(col in data.columns for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
-            raise ValueError("The DataFrame does not contain all required columns.")
-        
-        #this is used to resample the data to the specified number of days using the resample 
-        #and aggregates teh values using the agg method
-        data = data.resample(f'{n_days}D').agg({
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum'
-        })
-    #this is used to remove any rows with missing values 
-    data.dropna(inplace=True)
-
-    #plot the candlestick chart with the specified style, title and labels
-    mpf.plot(data, type='candle', style='charles', title=f'{company} Candlestick Chart',
-             ylabel='Price', volume=True)
-#------------------------------------------------------------------------------
-# plot Boxplot chart function
-#------------------------------------------------------------------------------
-#this box plot function has 3 parameters which is DF, column and window
-#the DF is for data frame that contains the stock market data
-#The column is to specify which column to be analyzed 
-#the window is the number of trading days to include in each window 
-def plot_stock_boxplot(df, column='Close', window=5):
-    
-    #this if statement is to check if the column exists in the data frame 
-    # if it is not it will raise the error
-    if column not in df.columns:
-        raise ValueError(f"Column '{column}' not found in the DataFrame.")
-
-    #The num_windows will calculate the number of windows that can be created based on the window size
-    #and length of the data set if the size is to large for the dataset it will raise an error
-    num_windows = len(df) - window + 1
-    if num_windows <= 0:
-        raise ValueError(f"Window size {window} is too large for the dataset length.")
-
-    #data_for_boxplot is a list that will hold that data for each window
-    # the loop iterates through the dataframe slicing the data into windows of size and append each slice
-    #into the data_for_boxplot
-    data_for_boxplot = []
-    for i in range(num_windows):
-        window_data = df[column].iloc[i:i + window].values
-        data_for_boxplot.append(window_data)
-
-    #the plt.figure(figsize=(10,6)) is used to set the figure size 
-    #the plt.boxplot(data_for_boxplot, showfliers=False) is used to create the boxplot without showing outliers
-    #the plt.title is used to set the title of the plot
-    #the plt.xlable and plt.ylable is used to set the lables for the x and y axis
-    plt.figure(figsize=(10, 6))
-    plt.boxplot(data_for_boxplot, showfliers=False)
-    plt.title(f'Boxplot of {column} over a Moving Window of {window} Days')
-    plt.xlabel(f'Moving Windows ({window} Days Each)')
-    plt.ylabel(f'{column} Value')
-
-    #plt.xticks is used to set the x axis tick lable and it creates tick at intervals that is 
-    #calculated by max(1, num_window //10) and lables them with the range of days in each window
-    plt.xticks(np.arange(1, num_windows + 1, max(1, num_windows // 10)),
-               [f'{i+1}-{i+window}' for i in range(0, num_windows, max(1, num_windows // 10))])
-    
-    #plt.grid(true) is used to add a grid to the plot
-    #plt.show is used to display the plots
-    plt.grid(True)
-    plt.show()
 
 #------------------------------------------------------------------------------
 # load and process data function
@@ -203,89 +117,7 @@ def load_and_process_dataset(company, start_date, end_date, features,
         raise ValueError("Invalid split method. choose from 'ratio','date', or 'random'.")
 
     return train_data, test_data
-#------------------------------------------------------------------------------
-# create Deep learning model function
-#------------------------------------------------------------------------------
-#this functions takes multiple parameters. 
-#The sequence length is used to represent the number of time steps in each input sequence 
-#The n_features is used for the number of features in each time step
-#The units are used for the number of units in each LSTM cell which by default is 256
-#The cell is the type of deep learning network that is being used 
-#n_layers is the number of deep learning layers that is in the model 
-#The dropout is used to prevent overfitting by randomly setting a fraction of the input units to 0 during training 
-#loss is used calculate the difference between the predicted outputs and the actual target values in the dataset 
-#the optimizer is an algorithm that updates the model's weights to minimize the loss function.
-#bidirectional is a boolean that indicates whether to use the Bidirectional layers.
-def create_model(sequence_length, n_features, units=256, cell=LSTM,n_layers=2, dropout=0.3,
-                 loss="mean_absolute_error", optimizer="rmsprop", bidirectional=False):
-    
-    #create model
-    #this is to initialize the model and the sequential model is a linear stack of layers 
-    #each layer has one input tensor and one output tensor.
-    model = Sequential()
 
-    #for loop where n_layers defnes how many layers to be added 
-    for i in range(n_layers):
-        
-        
-        if i == 0:
-            #first layer
-            #if bidirectional is true there will be a bidirectional layer added. 
-            #the layer will process the input sequence in both forward and backward direction and the output 
-            #will be a sequence of the same length as the input
-            if bidirectional:
-                model.add(Bidirectional(cell(units, return_sequences=True), 
-                                        batch_input_shape=(None, sequence_length, n_features))) 
-            else: 
-                #if bidirectional is false a undirectional RNN layer is added.
-                #the layer will process the input sequence in only one direction which is forward 
-                #and the output will be a sequence of the same length as the input 
-                model.add(cell(units, return_sequences=True, 
-                               batch_input_shape=(None, sequence_length, n_features)))
-        
-        elif i == n_layers - 1:
-            #last layer 
-            #if bidirectional is true there will be a bidirectional layer added
-            #this layer will process the input sequence in both forward and backward directions 
-            #but the output will be a fixed size vector and not a sequence 
-            if bidirectional:
-                model.add(Bidirectional(cell(units, return_sequences=False)))
-            else:
-                #if its false a undirectional layer is added. this means the layer process
-                #the input sequecne in only one direction and the output will be a fixed size vector
-                model.add(cell(units, return_sequences=False))
-        else:
-            #hidden layers
-            #if bidirectional is true a bidirectional layer is added with the 
-            #return_sequences = true this mean that the layer will process the input sequence in 
-            #both forward and backward directions, the output wll be a sequence of the smae length as the input 
-            if bidirectional:
-                model.add(Bidirectional(cell(units,return_sequences=True)))
-            else:
-            #if its false a undirectional layer is added with teh return sequence True.
-            #this is teh layer taht process the input sequence in only one direcional and the output 
-            #will be a sequence of the same length as the input 
-                model.add(cell(units, return_sequences=True))
-
-    #add dropout after each layer to apply dropout reularization
-    #this line addes a dropout layer to the model where dropout is a float value between 0 and 1
-    #that represents teh fraction of neurns to randomly drop during training 
-    model.add(Dropout(dropout))
-
-    #this line is to add a final dense layer to the model with a single output neuron 
-    #and a linear activation function 
-    #the output of this layer will be a single value which is suitable for regression 
-    #problems.
-    model.add(Dense(1, activation="linear"))
-
-    #this line compiles the model specifying the loss function which is typically mean squared error or mean absolute error 
-    #for regression problems 
-    #the metrics=["mean_absolute_error"] specifies that the model should track the mean absoute error during training 
-    #in addition to the loss function
-    # the optimization algorithm is used during training.
-    model.compile(loss=loss, metrics=["mean_absolute_error"], optimizer=optimizer)
-
-    return model
 
 #------------------------------------------------------------------------------
 # Load Data
@@ -550,6 +382,26 @@ plt.ylabel(f"{COMPANY} Share Price")
 plt.legend()
 plt.show()
 
+#------------------------------------------------------------------------------
+# Calling Candlestick and Boxplot graphs
+#------------------------------------------------------------------------------
+#plot candlestick chart for the data.
+#the plot_candlestick_chart is used to call the function to create the candlestick graph 
+#the campany argument is used to pass the company name into the graph title 
+#the train start and train end argument is used to call the data that is used to create the graphs 
+#the n_days=1 is used to represent the data for the single trading days and the n_days are set to a higher number
+#where each candlestick would represent the aggregated data
+plot_candlestick_chart(COMPANY, TEST_START,TEST_END, n_days=1)
+
+#plot boxplot for the data
+#the plot_stock_boxplot is the function being called this function is used to
+#create the box plot graph
+#the train data arugment is used to represent teh stock data. this data frame wourld use columns such as 
+#'Open', 'Close','High','low'
+#The colum = close is the keyword argument that specifies which clumn of data shoudl be used for ploting the boxplot
+#The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
+plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
+
 
 
 #------------------------------------------------------------------------------
@@ -561,25 +413,9 @@ real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
 
 prediction = model.predict(real_data)
 prediction = scaler.inverse_transform(prediction)
-print(f"Prediction: {prediction}")
+print(f"\nPrediction: {prediction}")
 
 
-#plot boxplot for the data
-#the plot_stock_boxplot is the function being called this function is used to
-#create the box plot graph
-#the train data arugment is used to represent teh stock data. this data frame wourld use columns such as 
-#'Open', 'Close','High','low'
-#The colum = close is the keyword argument that specifies which clumn of data shoudl be used for ploting the boxplot
-#The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
-plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
-
-#plot candlestick chart for the data.
-#the plot_candlestick_chart is used to call the function to create the candlestick graph 
-#the campany argument is used to pass the company name into the graph title 
-#the train start and train end argument is used to call the data that is used to create the graphs 
-#the n_days=1 is used to represent the data for the single trading days and the n_days are set to a higher number
-#where each candlestick would represent the aggregated data
-plot_candlestick_chart(COMPANY, TRAIN_START,TRAIN_END, n_days=1)
 
 #------------------------------------------------------------------------------
 # call deep learning model
@@ -589,6 +425,7 @@ model = create_model(sequence_length, n_features, units=units, cell=LSTM,
                      n_layers=n_layers, dropout=dropout)
 
 # Summary of the model to check the architecture
+print("\n")
 model.summary()
 
 
