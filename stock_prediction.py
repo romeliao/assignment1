@@ -206,52 +206,94 @@ def load_and_process_dataset(company, start_date, end_date, features,
 #------------------------------------------------------------------------------
 # create Deep learning model function
 #------------------------------------------------------------------------------
-def create_model(sequence_length, n_features, units=256, cell=GRU,n_layers=2, dropout=0.3,
+#this functions takes multiple parameters. 
+#The sequence length is used to represent the number of time steps in each input sequence 
+#The n_features is used for the number of features in each time step
+#The units are used for the number of units in each LSTM cell which by default is 256
+#The cell is the type of deep learning network that is being used 
+#n_layers is the number of deep learning layers that is in the model 
+#The dropout is used to prevent overfitting by randomly setting a fraction of the input units to 0 during training 
+#loss is used calculate the difference between the predicted outputs and the actual target values in the dataset 
+#the optimizer is an algorithm that updates the model's weights to minimize the loss function.
+#bidirectional is a boolean that indicates whether to use the Bidirectional layers.
+def create_model(sequence_length, n_features, units=256, cell=LSTM,n_layers=2, dropout=0.3,
                  loss="mean_absolute_error", optimizer="rmsprop", bidirectional=False):
     
     #create model
+    #this is to initialize the model and the sequential model is a linear stack of layers 
+    #each layer has one input tensor and one output tensor.
     model = Sequential()
-    for i in range(n_layers):
-        if i == 0:
 
+    #for loop where n_layers defnes how many layers to be added 
+    for i in range(n_layers):
+        
+        
+        if i == 0:
             #first layer
+            #if bidirectional is true there will be a bidirectional layer added. 
+            #the layer will process the input sequence in both forward and backward direction and the output 
+            #will be a sequence of the same length as the input
             if bidirectional:
                 model.add(Bidirectional(cell(units, return_sequences=True), 
                                         batch_input_shape=(None, sequence_length, n_features))) 
             else: 
+                #if bidirectional is false a undirectional RNN layer is added.
+                #the layer will process the input sequence in only one direction which is forward 
+                #and the output will be a sequence of the same length as the input 
                 model.add(cell(units, return_sequences=True, 
                                batch_input_shape=(None, sequence_length, n_features)))
+        
         elif i == n_layers - 1:
             #last layer 
+            #if bidirectional is true there will be a bidirectional layer added
+            #this layer will process the input sequence in both forward and backward directions 
+            #but the output will be a fixed size vector and not a sequence 
             if bidirectional:
                 model.add(Bidirectional(cell(units, return_sequences=False)))
             else:
+                #if its false a undirectional layer is added. this means the layer process
+                #the input sequecne in only one direction and the output will be a fixed size vector
                 model.add(cell(units, return_sequences=False))
         else:
             #hidden layers
+            #if bidirectional is true a bidirectional layer is added with the 
+            #return_sequences = true this mean that the layer will process the input sequence in 
+            #both forward and backward directions, the output wll be a sequence of the smae length as the input 
             if bidirectional:
                 model.add(Bidirectional(cell(units,return_sequences=True)))
             else:
+            #if its false a undirectional layer is added with teh return sequence True.
+            #this is teh layer taht process the input sequence in only one direcional and the output 
+            #will be a sequence of the same length as the input 
                 model.add(cell(units, return_sequences=True))
 
-        #add dropout after each layer
+    #add dropout after each layer to apply dropout reularization
+    #this line addes a dropout layer to the model where dropout is a float value between 0 and 1
+    #that represents teh fraction of neurns to randomly drop during training 
     model.add(Dropout(dropout))
+
+    #this line is to add a final dense layer to the model with a single output neuron 
+    #and a linear activation function 
+    #the output of this layer will be a single value which is suitable for regression 
+    #problems.
     model.add(Dense(1, activation="linear"))
+
+    #this line compiles the model specifying the loss function which is typically mean squared error or mean absolute error 
+    #for regression problems 
+    #the metrics=["mean_absolute_error"] specifies that the model should track the mean absoute error during training 
+    #in addition to the loss function
+    # the optimization algorithm is used during training.
     model.compile(loss=loss, metrics=["mean_absolute_error"], optimizer=optimizer)
 
     return model
 
 #------------------------------------------------------------------------------
 # Load Data
-## TO DO:
-# 1) Check if data has been saved before. 
-# If so, load the saved data
-# If not, save the data into a directory
 #------------------------------------------------------------------------------
 # DATA_SOURCE = "yahoo"
 COMPANY = 'CBA.AX'
 
-TRAIN_START = '2020-02-02'              # Start date to read
+TRAIN_START = '2021-02-02'              # Start date to read
 TRAIN_END = '2023-07-09'                # End date to read
 FEATURES = ['Open', 'Close', 'Volume']  #list of specific columns 
 NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
@@ -261,17 +303,17 @@ TEST_SIZE = 0.2                         #proportion of data to be used for testi
 SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
 SCALE = 'True'                          # this is to indicate if teh feature scaling is applied to the data
 FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
-WINDOW_SIZE = 10                        # this is the number of consecutive trading days to consider for the moving window
+WINDOW_SIZE = 16                        # this is the number of consecutive trading days to consider for the moving window
                                         # to generate the inputs for the models 
-sequence_length = 13                   # Number of time steps in the input sequence
+sequence_length = 10                    # Number of time steps in the input sequence
 n_features = 5                          # Number of features in each time step
-units = 130                             # Number of units in the LSTM layer
-n_layers = 6                            # Number of LSTM layers
-dropout = 0.5                           # Dropout rate
+units = 160                             # Number of units in the LSTM layer
+n_layers = 8                            # Number of LSTM layers
+dropout = 0.7                           # Dropout rate
 loss = 'mean_squared_error'             # Loss function
 optimizer = 'adam'                      # Optimizer
 bidirectional = False                    # Whether to use Bidirectional LSTM
-cell = GRU
+cell = LSTM
 
 #file path to save the data
 #FILE_PATH = "data/stock_data.csv"       
@@ -279,7 +321,7 @@ date_now = time.strftime("%Y-%m-%d")
 
 ticker_data_filename = os.path.join("csv-results", f"{COMPANY}_{date_now}.csv")
 # model name to save, making it as unique as possible based on parameters
-model_name = f"{date_now}_{COMPANY}-{SCALE}-{SPLIT_DATE}-\
+model_name = f"{date_now}_{COMPANY}-{SCALE}-{SPLIT_DATE}-{time}\
 {loss}-{optimizer}-{cell.__name__}layers-{n_layers}-units-{units}"
 
 # data = web.DataReader(COMPANY, DATA_SOURCE, TRAIN_START, TRAIN_END) # Read data using yahoo
@@ -294,12 +336,6 @@ train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END
 
 #------------------------------------------------------------------------------
 # Prepare Data
-## To do:
-# 1) Check if data has been prepared before. 
-# If so, load the saved data
-# If not, save the data into a directory
-# 2) Use a different price value eg. mid-point of Open & Close
-# 3) Change the Prediction days
 #------------------------------------------------------------------------------
 scaler = MinMaxScaler(feature_range=(0, 1)) 
 # Note that, by default, feature_range=(0, 1). Thus, if you want a different 
@@ -321,7 +357,7 @@ scaled_data = scaler.fit_transform(train_data[PRICE_VALUE].values.reshape(-1, 1)
 # given to reshape so as to maintain the same number of elements.
 
 # Number of days to look back to base the prediction
-PREDICTION_DAYS = 50 # Original
+PREDICTION_DAYS = 70 # Original
 
 # To store the training data
 x_train = []
@@ -436,7 +472,7 @@ csv_filename = os.path.join(csv_results_folder, model_name + ".csv")
 # Test the model accuracy on existing data
 #------------------------------------------------------------------------------
 # Load the test data
-TEST_START = '2022-06-20'
+TEST_START = '2021-06-20'
 TEST_END = '2023-05-30'
 
 # test_data = web.DataReader(COMPANY, DATA_SOURCE, TEST_START, TEST_END)
@@ -549,7 +585,7 @@ plot_candlestick_chart(COMPANY, TRAIN_START,TRAIN_END, n_days=1)
 # call deep learning model
 #------------------------------------------------------------------------------
 # Create the model using the function
-model = create_model(sequence_length, n_features, units=units, cell=GRU,
+model = create_model(sequence_length, n_features, units=units, cell=LSTM,
                      n_layers=n_layers, dropout=dropout)
 
 # Summary of the model to check the architecture
