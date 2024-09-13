@@ -26,7 +26,52 @@ from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,Input
 from Candlestick import plot_candlestick_chart
 from Boxplot import plot_stock_boxplot
 from DeepLearningModel import create_model
+from multistep import create_multistep_model, prepare_multistep_data
 
+
+COMPANY = 'CBA.AX'
+
+TRAIN_START = '2021-02-02'              # Start date to read
+TRAIN_END = '2023-07-09'                # End date to read
+FEATURES = ['Open', 'Close', 'Volume']  #list of specific columns 
+NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
+PRICE_VALUE = "Close"                   #indicates what price column will be used as target value 
+SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
+TEST_SIZE = 0.2                         #proportion of data to be used for testing
+SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
+SCALE = 'True'                          # this is to indicate if teh feature scaling is applied to the data
+FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
+WINDOW_SIZE = 16                        # this is the number of consecutive trading days to consider for the moving window
+                                        # to generate the inputs for the models 
+sequence_length = 10                    # Number of time steps in the input sequence
+n_features = 5                          # Number of features in each time step
+units = 160                             # Number of units in the LSTM layer
+n_layers = 8                            # Number of LSTM layers
+dropout = 0.7                           # Dropout rate
+loss = 'mean_squared_error'             # Loss function
+optimizer = 'adam'                      # Optimizer
+bidirectional = False                    # Whether to use Bidirectional LSTM
+cell = LSTM
+K = 5
+
+#------------------------------------------------------------------------------
+# multistep prediction
+#------------------------------------------------------------------------------
+
+def multistep_predict(model, input_data, sequence_length, k):
+    print(f"Input data size: {input_data.size}")
+    print(f"Expected size for reshaping: {sequence_length}")
+    
+    if input_data.size != sequence_length:
+        raise ValueError(f"Input data size {input_data.size} does not match the expected size {sequence_length}")
+    
+    input_data = np.reshape(input_data, (1, sequence_length, 1))
+    prediction = model.predict(input_data)
+    
+    prediction = prediction.reshape(-1, 1)
+    prediction = scaler.inverse_transform(prediction)
+    
+    return prediction
 
 #------------------------------------------------------------------------------
 # load and process data function
@@ -122,31 +167,6 @@ def load_and_process_dataset(company, start_date, end_date, features,
 #------------------------------------------------------------------------------
 # Load Data
 #------------------------------------------------------------------------------
-# DATA_SOURCE = "yahoo"
-COMPANY = 'CBA.AX'
-
-TRAIN_START = '2021-02-02'              # Start date to read
-TRAIN_END = '2023-07-09'                # End date to read
-FEATURES = ['Open', 'Close', 'Volume']  #list of specific columns 
-NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
-PRICE_VALUE = "Close"                   #indicates what price column will be used as target value 
-SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
-TEST_SIZE = 0.2                         #proportion of data to be used for testing
-SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
-SCALE = 'True'                          # this is to indicate if teh feature scaling is applied to the data
-FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
-WINDOW_SIZE = 16                        # this is the number of consecutive trading days to consider for the moving window
-                                        # to generate the inputs for the models 
-sequence_length = 10                    # Number of time steps in the input sequence
-n_features = 5                          # Number of features in each time step
-units = 160                             # Number of units in the LSTM layer
-n_layers = 8                            # Number of LSTM layers
-dropout = 0.7                           # Dropout rate
-loss = 'mean_squared_error'             # Loss function
-optimizer = 'adam'                      # Optimizer
-bidirectional = False                    # Whether to use Bidirectional LSTM
-cell = LSTM
-
 #file path to save the data
 #FILE_PATH = "data/stock_data.csv"       
 date_now = time.strftime("%Y-%m-%d")
@@ -206,6 +226,7 @@ x_train, y_train = np.array(x_train), np.array(y_train)
 # Now, x_train is a 2D array(p,q) where p = len(scaled_data) - PREDICTION_DAYS
 # and q = PREDICTION_DAYS; while y_train is a 1D array(p)
 
+x_train, y_train = prepare_multistep_data(scaled_data, PREDICTION_DAYS, k=K)
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 # We now reshape x_train into a 3D array(p, q, 1); Note that x_train 
 # is an array of p inputs with each input being a 2D array 
@@ -424,22 +445,20 @@ print(f"\nPrediction: {prediction}")
 model = create_model(sequence_length, n_features, units=units, cell=LSTM,
                      n_layers=n_layers, dropout=dropout)
 
+
 # Summary of the model to check the architecture
 print("\n")
 model.summary()
 
+model = create_multistep_model(sequence_length=PREDICTION_DAYS, 
+                               n_features=1, 
+                               units=units, 
+                               n_layers=n_layers, 
+                               dropout=dropout, 
+                               k=K)
 
-# A few concluding remarks here:
-# 1. The predictor is quite bad, especially if you look at the next day 
-# prediction, it missed the actual price by about 10%-13%
-# Can you find the reason?
-# 2. The code base at
-# https://github.com/x4nth055/pythoncode-tutorials/tree/master/machine-learning/stock-prediction
-# gives a much better prediction. Even though on the surface, it didn't seem 
-# to be a big difference (both use Stacked LSTM)
-# Again, can you explain it?
-# A more advanced and quite different technique use CNN to analyse the images
-# of the stock price changes to detect some patterns with the trend of
-# the stock price:
-# https://github.com/jason887/Using-Deep-Learning-Neural-Networks-and-Candlestick-Chart-Representation-to-Predict-Stock-Market
-# Can you combine these different techniques for a better prediction??
+# Example call to multistep_predict
+model_inputs = scaled_data[-PREDICTION_DAYS:]  # Last 'PREDICTION_DAYS' from the scaled data
+prediction = multistep_predict(model, model_inputs, PREDICTION_DAYS, k=K)
+
+print(f"\nMultistep Prediction for {K} days: \n {prediction}")
