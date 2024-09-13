@@ -26,7 +26,7 @@ from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,Input
 from Candlestick import plot_candlestick_chart
 from Boxplot import plot_stock_boxplot
 from DeepLearningModel import create_model
-from multistep import create_multistep_model, prepare_multistep_data
+from multistepFunction import create_multistep_model, prepare_multistep_data
 
 
 COMPANY = 'CBA.AX'
