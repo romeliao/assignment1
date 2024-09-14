@@ -27,13 +27,14 @@ from Candlestick import plot_candlestick_chart
 from Boxplot import plot_stock_boxplot
 from DeepLearningModel import create_model
 from multistepFunction import create_multistep_model, prepare_multistep_data
+from multivariateFunction import multivariate_prediction
 
 
 COMPANY = 'CBA.AX'
 
 TRAIN_START = '2021-02-02'              # Start date to read
 TRAIN_END = '2023-07-09'                # End date to read
-FEATURES = ['Open', 'Close', 'Volume']  #list of specific columns 
+FEATURES = ['Open','High','Low','Close','Adj Close','Volume']  #list of specific columns 
 NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
 PRICE_VALUE = "Close"                   #indicates what price column will be used as target value 
 SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
@@ -50,25 +51,36 @@ n_layers = 8                            # Number of LSTM layers
 dropout = 0.7                           # Dropout rate
 loss = 'mean_squared_error'             # Loss function
 optimizer = 'adam'                      # Optimizer
-bidirectional = False                    # Whether to use Bidirectional LSTM
+bidirectional = False                   # Whether to use Bidirectional LSTM
 cell = LSTM
-K = 5
+K = 5                                   # number of days to predict into the future 
+
 
 #------------------------------------------------------------------------------
 # multistep prediction
+# this function is used to predict future values using deep learning model
+# the function takes in parameters like model, input data , sequence_length and K 
 #------------------------------------------------------------------------------
 
 def multistep_predict(model, input_data, sequence_length, k):
     print(f"Input data size: {input_data.size}")
     print(f"Expected size for reshaping: {sequence_length}")
     
+    #this is to ensure that the input data has the expected number of elements if not it will raise an error
     if input_data.size != sequence_length:
         raise ValueError(f"Input data size {input_data.size} does not match the expected size {sequence_length}")
     
+    # this line reshapes the input data into a 3D array with shape 1, sequence_length,1
     input_data = np.reshape(input_data, (1, sequence_length, 1))
+    
+    #this line is to make a prediction using the reshaped input data 
     prediction = model.predict(input_data)
     
+    #this reshaped the prediction output to a 2D array with shape (k,1) where k is the number of 
+    #predicted values
     prediction = prediction.reshape(-1, 1)
+
+    #this line reverses any scaling or normalization that was applied to the data before training
     prediction = scaler.inverse_transform(prediction)
     
     return prediction
@@ -450,6 +462,7 @@ model = create_model(sequence_length, n_features, units=units, cell=LSTM,
 print("\n")
 model.summary()
 
+#calling multistep model
 model = create_multistep_model(sequence_length=PREDICTION_DAYS, 
                                n_features=1, 
                                units=units, 
@@ -457,8 +470,21 @@ model = create_multistep_model(sequence_length=PREDICTION_DAYS,
                                dropout=dropout, 
                                k=K)
 
-# Example call to multistep_predict
+#scaled_data[-PREDICTION_DAYS:]: This line extracts the last PREDICTION_DAYS entries from scaled_data.
+#scaled_data: This is the data you previously scaled (probably containing features like 'Open', 'High', 'Low', 'Close', etc.) 
+#PREDICTION_DAYS: This variable specifies how many days of data you want to use as input for your prediction.
 model_inputs = scaled_data[-PREDICTION_DAYS:]  # Last 'PREDICTION_DAYS' from the scaled data
+
+# the function is called here to make predictions using the LSTM model 
 prediction = multistep_predict(model, model_inputs, PREDICTION_DAYS, k=K)
 
-print(f"\nMultistep Prediction for {K} days: \n {prediction}")
+# the result of the mltistep prediction is printed out showing the forecasted values for the next 
+# K days 
+print(f"\nMultistep Prediction for {K} days: \n {prediction} \n")
+
+# calling the multivariate Prediction function
+prediction = multivariate_prediction(company=COMPANY, start_date=TRAIN_START, end_date=TRAIN_END,
+                                     prediction_days=PREDICTION_DAYS, features=FEATURES)
+
+# printing the reuslts of the selected features data.
+print(f"\n Multivariate_predictions: \n {prediction}")
