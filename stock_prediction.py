@@ -30,6 +30,7 @@ from multistepFunction import create_multistep_model, prepare_multistep_data
 from multivariateFunction import multivariate_prediction
 
 
+
 COMPANY = 'CBA.AX'
 
 TRAIN_START = '2021-02-02'              # Start date to read
@@ -53,7 +54,7 @@ loss = 'mean_squared_error'             # Loss function
 optimizer = 'adam'                      # Optimizer
 bidirectional = False                   # Whether to use Bidirectional LSTM
 cell = LSTM
-K = 5                                   # number of days to predict into the future 
+K = 16                                   # number of days to predict into the future 
 
 
 #------------------------------------------------------------------------------
@@ -485,6 +486,3 @@ print(f"\nMultistep Prediction for {K} days: \n {prediction} \n")
 # calling the multivariate Prediction function
 prediction = multivariate_prediction(company=COMPANY, start_date=TRAIN_START, end_date=TRAIN_END,
                                      prediction_days=PREDICTION_DAYS, features=FEATURES)
-
-# printing the reuslts of the selected features data.
-print(f"\n Multivariate_predictions: \n {prediction}")

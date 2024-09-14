@@ -22,7 +22,8 @@ from tensorflow.keras.layers import Dense, Dropout, LSTM
 def multivariate_prediction(company, start_date, end_date, prediction_days, features):
     
     #this is to select which features to predict
-    selected_feature = 'Close'
+    # list of features ['Open','High','Low','Close','Adj Close','Volume']
+    selected_feature = 'Volume'
 
     # Load data
     # this is to call the dateset into the model
@@ -111,5 +112,7 @@ def multivariate_prediction(company, start_date, end_date, prediction_days, feat
     # the scaled predictions are transformed back to their original scale using the scaler. inverse_transform
     # this returns the actual features prices whcih can be compared with the real test values.
     prediction = scaler.inverse_transform(prediction_reshaped)[:, features.index(selected_feature)]
+
+    print(f"\n Multivariate_predictions of {selected_feature} function: \n {prediction}")
 
     return prediction
