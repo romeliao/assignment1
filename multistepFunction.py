@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,InputLayer
 
@@ -84,4 +85,6 @@ def prepare_multistep_data(data, sequence_length, k):
         # (especially for deep learning).
 
     return np.array(X), np.array(y)
+
+
 

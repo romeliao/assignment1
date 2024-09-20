@@ -54,7 +54,7 @@ loss = 'mean_squared_error'             # Loss function
 optimizer = 'adam'                      # Optimizer
 bidirectional = False                   # Whether to use Bidirectional LSTM
 cell = LSTM
-K = 16                                   # number of days to predict into the future 
+K = 10                                  # number of days to predict into the future 
 
 
 #------------------------------------------------------------------------------
@@ -483,6 +483,18 @@ prediction = multistep_predict(model, model_inputs, PREDICTION_DAYS, k=K)
 # K days 
 print(f"\nMultistep Prediction for {K} days: \n {prediction} \n")
 
+# Plotting the results for multistep prediction to see the predicted outcome to the actual outcome
+plt.figure(figsize=(14, 7))
+plt.plot(y_train, label='Actual Outcomes', color='blue', linewidth=2)
+plt.plot(prediction, label='Predicted Outcomes', color='red', linestyle='dashed', linewidth=2)
+plt.title('Predicted vs Actual Outcomes')
+plt.xlabel('Time Step')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+
 # calling the multivariate Prediction function
 prediction = multivariate_prediction(company=COMPANY, start_date=TRAIN_START, end_date=TRAIN_END,
                                      prediction_days=PREDICTION_DAYS, features=FEATURES)
+                                     

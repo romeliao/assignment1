@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM
@@ -23,12 +24,16 @@ def multivariate_prediction(company, start_date, end_date, prediction_days, feat
     
     #this is to select which features to predict
     # list of features ['Open','High','Low','Close','Adj Close','Volume']
-    selected_feature = 'Volume'
+    selected_feature = 'Close'
 
     # Load data
     # this is to call the dateset into the model
-    data = pd.read_csv(f"csv-results/CBA.AX_2024-09-14.csv")
-
+    try:
+        data = pd.read_csv(f"csv-results/CBA.AX_2024-09-20.csv")
+    except FileNotFoundError:
+        print("File not found. Please check the file path and name.")
+        return
+    
     # Convert date to datetime and set as index
     # this is to convert the date to a datetime object for easy filtering 
     # the date column is sed to set as the index for the data Dataframe to allow time based operations 
@@ -66,18 +71,23 @@ def multivariate_prediction(company, start_date, end_date, prediction_days, feat
     # Split data into training and testing sets
     # this is where the data is split into training and testing sets with 80% for traning and the remaining for testing 
     # thsi split ensures the model can be evaluated on unseen data
+   # Split data into training, validation, and testing sets
     train_size = int(0.8 * len(x))
-    x_train, x_test = x[0:train_size], x[train_size:]
-    y_train, y_test = y[0:train_size], y[train_size:]
+    val_size = int(0.1 * len(x))
+    x_train, x_val, x_test = x[0:train_size], x[train_size:train_size + val_size], x[train_size + val_size:]
+    y_train, y_val, y_test = y[0:train_size], y[train_size:train_size + val_size], y[train_size + val_size:]
 
     # Reshape data for LSTM
     # the x_train and x__test arrays are reshaped to te required 3D shape for LSTM models
     # x_train.shape[0]: Number of samples.
     # x_train.shape[1]: Number of time steps (equal to prediction_days).
     # len(features): The number of features per time step (e.g., 'Open', 'Close', etc.).
+    # Reshape data for LSTM
     x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], len(features)))
+    x_val = np.reshape(x_val, (x_val.shape[0], x_val.shape[1], len(features)))
     x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], len(features)))
-
+    
+    
     # Build model
     # the first LSTM layer returns sequences
     # the second LSTM layer returns a signle output
@@ -97,6 +107,10 @@ def multivariate_prediction(company, start_date, end_date, prediction_days, feat
     # the model uses mean squared error as the loss function which is suitable for regression problems
     model.compile(optimizer='adam', loss='mean_squared_error')
 
+    #train model
+    model.fit(x_train, y_train, validation_data=(x_val, y_val), epochs=20, batch_size=32)
+
+
     # Make prediction
     # the trainind model makes predictions on the test set which are scaled values of the selected 
     # function price 
@@ -107,11 +121,22 @@ def multivariate_prediction(company, start_date, end_date, prediction_days, feat
     # the selected features
     prediction_reshaped = np.zeros((prediction.shape[0], len(features)))
     prediction_reshaped[:, features.index(selected_feature)] = prediction.flatten()
-
+    prediction = scaler.inverse_transform(prediction_reshaped)[:, features.index(selected_feature)]
+    
     # Inverse transform the prediction
     # the scaled predictions are transformed back to their original scale using the scaler. inverse_transform
     # this returns the actual features prices whcih can be compared with the real test values.
-    prediction = scaler.inverse_transform(prediction_reshaped)[:, features.index(selected_feature)]
+    actual_values = scaler.inverse_transform(np.zeros((y_test.shape[0], len(features))))[:, features.index('Close')]
+
+# Plot results
+    plt.figure(figsize=(14, 7))
+    plt.plot(actual_values, color='blue', label='Actual Prices')
+    plt.plot(prediction, color='red', label='Predicted Prices')
+    plt.title(f'{company} Stock Price Prediction of Actual prices Vs Predicted Prices')
+    plt.xlabel('Days')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.show()
 
     print(f"\n Multivariate_predictions of {selected_feature} function: \n {prediction}")
 
