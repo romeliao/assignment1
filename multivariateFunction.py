@@ -12,7 +12,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM
 
 
-
+FILE_TO_READ = "csv-results/CBA.AX_2024-10-01.csv"
 #------------------------------------------------------------------------------
 # multivariate_prediction function 
 #------------------------------------------------------------------------------
@@ -29,7 +29,7 @@ def multivariate_prediction(company, start_date, end_date, prediction_days, feat
     # Load data
     # this is to call the dateset into the model
     try:
-        data = pd.read_csv(f"csv-results/CBA.AX_2024-09-20.csv")
+        data = pd.read_csv(FILE_TO_READ)
     except FileNotFoundError:
         print("File not found. Please check the file path and name.")
         return

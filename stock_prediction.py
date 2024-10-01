@@ -22,17 +22,17 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,InputLayer
+from statsmodels.tsa.arima.model import ARIMA
 
 from Candlestick import plot_candlestick_chart
 from Boxplot import plot_stock_boxplot
 from DeepLearningModel import create_model
-from multistepFunction import create_multistep_model, prepare_multistep_data
+from multistepFunction import create_multistep_model, prepare_multistep_data, multistep_predict
 from multivariateFunction import multivariate_prediction
 
 
 
 COMPANY = 'CBA.AX'
-
 TRAIN_START = '2021-02-02'              # Start date to read
 TRAIN_END = '2023-07-09'                # End date to read
 FEATURES = ['Open','High','Low','Close','Adj Close','Volume']  #list of specific columns 
@@ -55,36 +55,7 @@ optimizer = 'adam'                      # Optimizer
 bidirectional = False                   # Whether to use Bidirectional LSTM
 cell = LSTM
 K = 10                                  # number of days to predict into the future 
-
-
-#------------------------------------------------------------------------------
-# multistep prediction
-# this function is used to predict future values using deep learning model
-# the function takes in parameters like model, input data , sequence_length and K 
-#------------------------------------------------------------------------------
-
-def multistep_predict(model, input_data, sequence_length, k):
-    print(f"Input data size: {input_data.size}")
-    print(f"Expected size for reshaping: {sequence_length}")
-    
-    #this is to ensure that the input data has the expected number of elements if not it will raise an error
-    if input_data.size != sequence_length:
-        raise ValueError(f"Input data size {input_data.size} does not match the expected size {sequence_length}")
-    
-    # this line reshapes the input data into a 3D array with shape 1, sequence_length,1
-    input_data = np.reshape(input_data, (1, sequence_length, 1))
-    
-    #this line is to make a prediction using the reshaped input data 
-    prediction = model.predict(input_data)
-    
-    #this reshaped the prediction output to a 2D array with shape (k,1) where k is the number of 
-    #predicted values
-    prediction = prediction.reshape(-1, 1)
-
-    #this line reverses any scaling or normalization that was applied to the data before training
-    prediction = scaler.inverse_transform(prediction)
-    
-    return prediction
+ARIMA_ORDER = (5, 2, 0)                 # the tuple that defines the parameter of the ARIMA model 
 
 #------------------------------------------------------------------------------
 # load and process data function
@@ -177,6 +148,28 @@ def load_and_process_dataset(company, start_date, end_date, features,
     return train_data, test_data
 
 
+
+#------------------------------------------------------------------------------
+# Train ARIMA Model
+# The function takes in parameters liek train_data and order 
+# Train_data is the time seriese data that the ARIMA model will be trained on
+# the order is the tuple that defines the paremeters of the ARIMA model where 
+# p is the number of lag observations 
+# d is the number of times the data needs to be differenced to make t stationary 
+# q is the size of the movin agerage window 
+#------------------------------------------------------------------------------
+def train_arima_model(train_data, order=ARIMA_ORDER):
+
+    #this is used to create the arima model using the train_data object and the specidied order 
+    model = ARIMA(train_data, order=order)
+
+    # this line fits the ARIMA model to the training data the model estimates the coefficients for the ARIMA process
+    #to best fit the data 
+    model_fit = model.fit()
+    
+    return model_fit
+
+
 #------------------------------------------------------------------------------
 # Load Data
 #------------------------------------------------------------------------------
@@ -198,7 +191,16 @@ train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END
                                                  test_size=TEST_SIZE, 
                                                  split_date=SPLIT_DATE,scale=SCALE,
                                                  feature_range=FEATURE_RANGE)
+#extract the target variable for ARIMA 
+train_target = train_data[PRICE_VALUE]
+test_target = test_data[PRICE_VALUE]
 
+#train the ARIMA model
+arima_model = train_arima_model(train_target)
+
+# Make predictions using the ARIMA model
+arima_predictions = arima_model.forecast(steps=len(test_target))
+arima_predictions = arima_predictions.values
 #------------------------------------------------------------------------------
 # Prepare Data
 #------------------------------------------------------------------------------
@@ -248,11 +250,6 @@ x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 
 #------------------------------------------------------------------------------
 # Build the Model
-## TO DO:
-# 1) Check if data has been built before. 
-# If so, load the saved data
-# If not, save the data into a directory
-# 2) Change the model to increase accuracy?
 #------------------------------------------------------------------------------
 model = Sequential() # Basic neural network
 # See: https://www.tensorflow.org/api_docs/python/tf/keras/Sequential
@@ -376,14 +373,6 @@ model_inputs = scaler.transform(model_inputs)
 # but there may be a lower/higher price during the test period 
 # [TEST_START, TEST_END]. That can lead to out-of-bound values (negative and
 # greater than one)
-# We'll call this ISSUE #2
-
-# TO DO: Generally, there is a better way to process the data so that we 
-# can use part of it for training and the rest for testing. You need to 
-# implement such a way
-# save the final dataframe to csv-results folder
-
-
 
 #------------------------------------------------------------------------------
 # Make predictions on test data
@@ -400,12 +389,26 @@ predicted_prices = model.predict(x_test)
 predicted_prices = scaler.inverse_transform(predicted_prices)
 # Clearly, as we transform our data into the normalized range (0,1),
 # we now need to reverse this transformation 
+
+#this line creates an ensemble of predictions by averaging two sets of predicted values
+ensemble_predictions = (arima_predictions + predicted_prices.flatten()) / 2
+
+#this is used to extract the actual prices from the test set
+actual_prices = test_target.values
+
+#plotting a graph with ARIMA predictions 
+plt.figure(figsize=(14, 7))
+plt.plot(actual_prices, color="black", label=f"Actual {COMPANY} Price")
+plt.plot(arima_predictions, color="red", label="ARIMA Predictions")
+plt.plot(predicted_prices, color="green", label="DL Predictions")
+plt.plot(ensemble_predictions, color="blue", label="Ensemble Predictions")
+plt.title(f"{COMPANY} Share Price Predictions")
+plt.xlabel("Time")
+plt.ylabel(f"{COMPANY} Share Price")
+plt.legend()
+plt.show()
 #------------------------------------------------------------------------------
 # Plot the test predictions
-## To do:
-# 1) Candle stick charts
-# 2) Chart showing High & Lows of the day
-# 3) Show chart of next few days (predicted)
 #------------------------------------------------------------------------------
 
 plt.plot(actual_prices, color="black", label=f"Actual {COMPANY} Price")
@@ -436,6 +439,11 @@ plot_candlestick_chart(COMPANY, TEST_START,TEST_END, n_days=1)
 #The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
 plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
 
+#------------------------------------------------------------------------------
+# ARIMA Predictions
+#------------------------------------------------------------------------------
+#this is used to print out the predicted values form the ARIMA model
+print(f"\nARIMA Predictions:\n{arima_predictions}")
 
 
 #------------------------------------------------------------------------------
@@ -492,7 +500,6 @@ plt.xlabel('Time Step')
 plt.ylabel('Value')
 plt.legend()
 plt.show()
-
 
 # calling the multivariate Prediction function
 prediction = multivariate_prediction(company=COMPANY, start_date=TRAIN_START, end_date=TRAIN_END,

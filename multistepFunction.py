@@ -59,6 +59,7 @@ def create_multistep_model(sequence_length, n_features, units, n_layers, dropout
 # this is used to create training data for a multistep time series forecasting model 
 # it generates the input sequences(x) and the corresponding output sequences y form the given data 
 #------------------------------------------------------------------------------
+
 def prepare_multistep_data(data, sequence_length, k):
 
     # this x list will hold the input sequences and y list will hold the correspondign 
@@ -86,5 +87,29 @@ def prepare_multistep_data(data, sequence_length, k):
 
     return np.array(X), np.array(y)
 
+#------------------------------------------------------------------------------
+# multistep prediction
+# this function is used to predict future values using deep learning model
+# the function takes in parameters like model, input data , sequence_length and K 
+#------------------------------------------------------------------------------
+def multistep_predict(model, input_data, sequence_length, k):
+    print(f"Input data size: {input_data.size}")
+    print(f"Expected size for reshaping: {sequence_length}")
+    
+    #this is to ensure that the input data has the expected number of elements if not it will raise an error
+    if input_data.size != sequence_length:
+        raise ValueError(f"Input data size {input_data.size} does not match the expected size {sequence_length}")
+    
+    # this line reshapes the input data into a 3D array with shape 1, sequence_length,1
+    input_data = np.reshape(input_data, (1, sequence_length, 1))
+    
+    #this line is to make a prediction using the reshaped input data 
+    prediction = model.predict(input_data)
+    
+    #this reshaped the prediction output to a 2D array with shape (k,1) where k is the number of 
+    #predicted values
+    prediction = prediction.reshape(-1, 1)
+
+    return prediction
 
 
