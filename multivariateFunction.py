@@ -12,7 +12,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM
 
 
-FILE_TO_READ = "csv-results/CBA.AX_2024-10-01.csv"
+FILE_TO_READ = "csv-results/CBA.AX_2024-10-12.csv"
 #------------------------------------------------------------------------------
 # multivariate_prediction function 
 #------------------------------------------------------------------------------

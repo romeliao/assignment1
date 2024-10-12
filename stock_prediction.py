@@ -22,7 +22,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,InputLayer
-from statsmodels.tsa.arima.model import ARIMA
+from ArimaModel import train_arima_model, ARIMA_ORDER,plot_predictions,print_arima_predictions
 
 from Candlestick import plot_candlestick_chart
 from Boxplot import plot_stock_boxplot
@@ -32,14 +32,15 @@ from multivariateFunction import multivariate_prediction
 
 
 
+
 COMPANY = 'CBA.AX'
 TRAIN_START = '2021-02-02'              # Start date to read
 TRAIN_END = '2023-07-09'                # End date to read
 FEATURES = ['Open','High','Low','Close','Adj Close','Volume']  #list of specific columns 
 NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
-PRICE_VALUE = "Close"                   #indicates what price column will be used as target value 
+PRICE_VALUE = "High"                    #indicates what price column will be used as target value 
 SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
-TEST_SIZE = 0.2                         #proportion of data to be used for testing
+TEST_SIZE = 0.3                         #proportion of data to be used for testing
 SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
 SCALE = 'True'                          # this is to indicate if teh feature scaling is applied to the data
 FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
@@ -47,15 +48,15 @@ WINDOW_SIZE = 16                        # this is the number of consecutive trad
                                         # to generate the inputs for the models 
 sequence_length = 10                    # Number of time steps in the input sequence
 n_features = 5                          # Number of features in each time step
-units = 160                             # Number of units in the LSTM layer
+units = 210                             # Number of units in the LSTM layer
 n_layers = 8                            # Number of LSTM layers
-dropout = 0.7                           # Dropout rate
+dropout = 0.5                           # Dropout rate
 loss = 'mean_squared_error'             # Loss function
 optimizer = 'adam'                      # Optimizer
 bidirectional = False                   # Whether to use Bidirectional LSTM
-cell = LSTM
-K = 10                                  # number of days to predict into the future 
-ARIMA_ORDER = (5, 2, 0)                 # the tuple that defines the parameter of the ARIMA model 
+cell = GRU
+K = 20                                  # number of days to predict into the future 
+
 
 #------------------------------------------------------------------------------
 # load and process data function
@@ -147,29 +148,6 @@ def load_and_process_dataset(company, start_date, end_date, features,
 
     return train_data, test_data
 
-
-
-#------------------------------------------------------------------------------
-# Train ARIMA Model
-# The function takes in parameters liek train_data and order 
-# Train_data is the time seriese data that the ARIMA model will be trained on
-# the order is the tuple that defines the paremeters of the ARIMA model where 
-# p is the number of lag observations 
-# d is the number of times the data needs to be differenced to make t stationary 
-# q is the size of the movin agerage window 
-#------------------------------------------------------------------------------
-def train_arima_model(train_data, order=ARIMA_ORDER):
-
-    #this is used to create the arima model using the train_data object and the specidied order 
-    model = ARIMA(train_data, order=order)
-
-    # this line fits the ARIMA model to the training data the model estimates the coefficients for the ARIMA process
-    #to best fit the data 
-    model_fit = model.fit()
-    
-    return model_fit
-
-
 #------------------------------------------------------------------------------
 # Load Data
 #------------------------------------------------------------------------------
@@ -191,6 +169,16 @@ train_data, test_data = load_and_process_dataset(COMPANY, TRAIN_START, TRAIN_END
                                                  test_size=TEST_SIZE, 
                                                  split_date=SPLIT_DATE,scale=SCALE,
                                                  feature_range=FEATURE_RANGE)
+
+
+#------------------------------------------------------------------------------
+# Calling ARIMA Model
+#------------------------------------------------------------------------------
+model_fit = train_arima_model(train_data=train_data, order=ARIMA_ORDER)
+
+#------------------------------------------------------------------------------
+# Training the Arima Model
+#------------------------------------------------------------------------------                                 
 #extract the target variable for ARIMA 
 train_target = train_data[PRICE_VALUE]
 test_target = test_data[PRICE_VALUE]
@@ -201,6 +189,8 @@ arima_model = train_arima_model(train_target)
 # Make predictions using the ARIMA model
 arima_predictions = arima_model.forecast(steps=len(test_target))
 arima_predictions = arima_predictions.values
+
+
 #------------------------------------------------------------------------------
 # Prepare Data
 #------------------------------------------------------------------------------
@@ -245,8 +235,6 @@ x_train, y_train = prepare_multistep_data(scaled_data, PREDICTION_DAYS, k=K)
 x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
 # We now reshape x_train into a 3D array(p, q, 1); Note that x_train 
 # is an array of p inputs with each input being a 2D array 
-
-
 
 #------------------------------------------------------------------------------
 # Build the Model
@@ -396,17 +384,6 @@ ensemble_predictions = (arima_predictions + predicted_prices.flatten()) / 2
 #this is used to extract the actual prices from the test set
 actual_prices = test_target.values
 
-#plotting a graph with ARIMA predictions 
-plt.figure(figsize=(14, 7))
-plt.plot(actual_prices, color="black", label=f"Actual {COMPANY} Price")
-plt.plot(arima_predictions, color="red", label="ARIMA Predictions")
-plt.plot(predicted_prices, color="green", label="DL Predictions")
-plt.plot(ensemble_predictions, color="blue", label="Ensemble Predictions")
-plt.title(f"{COMPANY} Share Price Predictions")
-plt.xlabel("Time")
-plt.ylabel(f"{COMPANY} Share Price")
-plt.legend()
-plt.show()
 #------------------------------------------------------------------------------
 # Plot the test predictions
 #------------------------------------------------------------------------------
@@ -418,6 +395,14 @@ plt.xlabel("Time")
 plt.ylabel(f"{COMPANY} Share Price")
 plt.legend()
 plt.show()
+
+#------------------------------------------------------------------------------
+# Plot the Arima Model
+#------------------------------------------------------------------------------
+#Calling graph function for ARIMA Model
+plot_predictions(actual_prices, arima_predictions, predicted_prices, 
+                 ensemble_predictions,company_name=COMPANY)
+
 
 #------------------------------------------------------------------------------
 # Calling Candlestick and Boxplot graphs
@@ -439,12 +424,6 @@ plot_candlestick_chart(COMPANY, TEST_START,TEST_END, n_days=1)
 #The window_SIZE is used to specify the size of the moving window used to group the data for teh boxplots 
 plot_stock_boxplot(train_data,column='Close', window=WINDOW_SIZE)
 
-#------------------------------------------------------------------------------
-# ARIMA Predictions
-#------------------------------------------------------------------------------
-#this is used to print out the predicted values form the ARIMA model
-print(f"\nARIMA Predictions:\n{arima_predictions}")
-
 
 #------------------------------------------------------------------------------
 # Predict next day
@@ -463,7 +442,7 @@ print(f"\nPrediction: {prediction}")
 # call deep learning model
 #------------------------------------------------------------------------------
 # Create the model using the function
-model = create_model(sequence_length, n_features, units=units, cell=LSTM,
+model = create_model(sequence_length, n_features, units=units, cell=GRU,
                      n_layers=n_layers, dropout=dropout)
 
 
@@ -471,6 +450,15 @@ model = create_model(sequence_length, n_features, units=units, cell=LSTM,
 print("\n")
 model.summary()
 
+#------------------------------------------------------------------------------
+# print ARIMA Predictions
+#------------------------------------------------------------------------------
+print_arima_predictions(arima_predictions)
+
+
+#------------------------------------------------------------------------------
+# Calling multistep model
+#------------------------------------------------------------------------------
 #calling multistep model
 model = create_multistep_model(sequence_length=PREDICTION_DAYS, 
                                n_features=1, 
