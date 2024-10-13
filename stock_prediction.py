@@ -34,27 +34,27 @@ from multivariateFunction import multivariate_prediction
 
 
 COMPANY = 'CBA.AX'
-TRAIN_START = '2021-02-02'              # Start date to read
-TRAIN_END = '2023-07-09'                # End date to read
+TRAIN_START = '2021-05-02'              # Start date to read
+TRAIN_END = '2023-10-09'                # End date to read
 FEATURES = ['Open','High','Low','Close','Adj Close','Volume']  #list of specific columns 
 NAN_STRATEGY = 'ffill'                  #varaible to handle missing data
-PRICE_VALUE = "High"                    #indicates what price column will be used as target value 
+PRICE_VALUE = "Open"                    #indicates what price column will be used as target value 
 SPLIT_METHOD = 'ratio'                  #method to split the data into training and testing sets
 TEST_SIZE = 0.3                         #proportion of data to be used for testing
 SPLIT_DATE = '2022-01-01'               #date to split the data into training and testing sets
 SCALE = 'True'                          # this is to indicate if teh feature scaling is applied to the data
 FEATURE_RANGE = (0,1)                   # the range to which the features will be scaled, usually between 0 and 1
-WINDOW_SIZE = 16                        # this is the number of consecutive trading days to consider for the moving window
+WINDOW_SIZE = 20                        # this is the number of consecutive trading days to consider for the moving window
                                         # to generate the inputs for the models 
 sequence_length = 10                    # Number of time steps in the input sequence
-n_features = 5                          # Number of features in each time step
-units = 210                             # Number of units in the LSTM layer
-n_layers = 8                            # Number of LSTM layers
-dropout = 0.5                           # Dropout rate
+n_features = 4                          # Number of features in each time step
+units = 200                             # Number of units in the LSTM layer
+n_layers = 5                            # Number of LSTM layers
+dropout = 0.6                           # Dropout rate
 loss = 'mean_squared_error'             # Loss function
 optimizer = 'adam'                      # Optimizer
-bidirectional = False                   # Whether to use Bidirectional LSTM
-cell = GRU
+bidirectional = True                   # Whether to use Bidirectional LSTM
+cell = LSTM
 K = 20                                  # number of days to predict into the future 
 
 

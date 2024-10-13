@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # q is the size of the movin agerage window 
 #------------------------------------------------------------------------------
 # the tuple that defines the parameter of the ARIMA model 
-ARIMA_ORDER = (15, 2, 0)           
+ARIMA_ORDER = (12, 1, 1)           
 
 
 def train_arima_model(train_data, order=ARIMA_ORDER):

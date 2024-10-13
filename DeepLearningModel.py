@@ -16,7 +16,7 @@ from tensorflow.keras.layers import Dense, Dropout, LSTM,GRU,Bidirectional,Input
 #loss is used calculate the difference between the predicted outputs and the actual target values in the dataset 
 #the optimizer is an algorithm that updates the model's weights to minimize the loss function.
 #bidirectional is a boolean that indicates whether to use the Bidirectional layers.
-def create_model(sequence_length, n_features, units=256, cell=GRU,n_layers=2, dropout=0.3,
+def create_model(sequence_length, n_features, units=256, cell=LSTM,n_layers=2, dropout=0.3,
                  loss="mean_absolute_error", optimizer="rmsprop", bidirectional=False):
     
     #create model
